@@ -1,0 +1,62 @@
+records: 5000
+range_scan: [1666, 2166]
+
+timings
+- heap    bulk_insert     0.133740s    37385.86 ops/s
+- heap    random_get      1.946388s     1027.54 ops/s
+- heap    random_update   1.965967s     1017.31 ops/s
+- heap    range_scan      0.005230s    95801.12 ops/s
+- heap    full_scan       0.003795s  1317537.64 ops/s
+- heap    random_delete   0.501972s      996.07 ops/s
+
+- primary bulk_insert    23.765753s      210.39 ops/s
+- primary random_get      0.052599s    38023.30 ops/s
+- primary random_update   4.103032s      487.44 ops/s
+- primary range_scan      0.002206s   227099.35 ops/s
+- primary full_scan       0.003833s  1304447.28 ops/s
+- primary random_delete   4.530982s      110.35 ops/s
+
+- hash    bulk_insert     0.146181s    34204.13 ops/s
+- hash    random_get      0.094988s    21055.32 ops/s
+- hash    random_update   0.117489s    17022.94 ops/s
+- hash    range_scan      0.005035s    99505.12 ops/s
+- hash    full_scan       0.004840s  1033013.26 ops/s
+- hash    random_delete   0.029870s    16738.95 ops/s
+
+engine stats
+- heap
+  page_reads: 374188
+  page_writes: 7662
+  file_size_bytes: 663552
+  page_count: 162
+  active_records: 4500
+  deleted_slots: 500
+  overflow_pages: 0
+  page_splits: 0
+  bucket_count: 0
+  max_overflow_chain: 0
+  last_overflow_page_id: 4294967295
+- primary
+  page_reads: 146
+  page_writes: 292
+  file_size_bytes: 598016
+  page_count: 146
+  active_records: 4500
+  deleted_slots: 0
+  overflow_pages: 0
+  page_splits: 161
+  bucket_count: 0
+  max_overflow_chain: 0
+  last_overflow_page_id: 4294967295
+- hash
+  page_reads: 25816
+  page_writes: 7884
+  file_size_bytes: 1048576
+  page_count: 256
+  active_records: 4500
+  deleted_slots: 500
+  overflow_pages: 128
+  page_splits: 0
+  bucket_count: 128
+  max_overflow_chain: 2
+  last_overflow_page_id: 255
