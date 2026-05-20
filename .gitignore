@@ -1,0 +1,29 @@
+# Rust build output
+/target/
+
+# rustc --test output generated next to exercise files
+/01_btree_basics/01_search_node
+/01_btree_basics/02_insert_into_leaf
+/01_btree_basics/03_split_child
+/01_btree_basics/04_insert_non_full
+/01_btree_basics/05_btree_insert_get
+
+# Local database files generated while learning storage/page management
+*.db
+*.db-*
+*.dat
+*.bin
+*.page
+*.pages
+*.wal
+*.log
+
+# Local scratch data
+/tmp/
+**/tmp/
+**/*.tmp
+
+# OS/editor files
+.DS_Store
+*.swp
+*.swo
