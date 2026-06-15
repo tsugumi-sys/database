@@ -122,6 +122,8 @@ Exercises: [04_page_file](./04_page_file)
 
 B+Tree の internal node と leaf node を、Rust の構造体ではなく page 内の bytes として表現する。
 
+Exercises: [05_page_node](./05_page_node)
+
 学ぶこと:
 
 - node type
@@ -146,6 +148,8 @@ B+Tree の internal node と leaf node を、Rust の構造体ではなく page 
 
 ページファイルと page 上の node 表現を使って、最初の永続化 B+Tree を作る。
 
+Exercises: [06_persistent_bplus_tree](./06_persistent_bplus_tree)
+
 学ぶこと:
 
 - root page id の管理
@@ -167,6 +171,8 @@ B+Tree の internal node と leaf node を、Rust の構造体ではなく page 
 ## Step 7: Slotted Page を学ぶ
 
 文字列や可変長 value を扱うため、ページ内に slotted page 形式を導入する。
+
+Exercises: [07_slotted_page](./07_slotted_page)
 
 学ぶこと:
 
@@ -193,6 +199,8 @@ B+Tree の internal node と leaf node を、Rust の構造体ではなく page 
 
 int だけでなく string を保存できるようにし、DB の record 表現に近づける。
 
+Exercises: [08_typed_data](./08_typed_data)
+
 学ぶこと:
 
 - value encoding
@@ -217,6 +225,8 @@ int だけでなく string を保存できるようにし、DB の record 表現
 
 leaf node に直接 value を詰めるのではなく、record を slotted page に置き、B+Tree から record location を指す構造を学ぶ。
 
+Exercises: [09_table_index](./09_table_index)
+
 学ぶこと:
 
 - index と table storage の分離
@@ -238,6 +248,8 @@ leaf node に直接 value を詰めるのではなく、record を slotted page 
 ## Step 10: Scan と簡単なクエリ操作
 
 DB らしい操作として、範囲取得や全件走査を実装する。
+
+Exercises: [10_scan_query](./10_scan_query)
 
 学ぶこと:
 
