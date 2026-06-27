@@ -613,6 +613,25 @@ mod tests {
     }
 
     #[test]
+    fn internal_split_persists_many_values_after_reopen() {
+        let path = temp_path("internal_split");
+        {
+            let mut tree = PersistentBPlusTree::open(&path).unwrap();
+            for key in 0..90_000 {
+                tree.insert(key, key * 10).unwrap();
+            }
+            tree.flush().unwrap();
+        }
+
+        let mut reopened = PersistentBPlusTree::open(&path).unwrap();
+        for key in [0, 1, 127, 128, 255, 256, 43_520, 89_999] {
+            assert_eq!(reopened.get(key).unwrap(), Some(key * 10));
+        }
+        assert_eq!(reopened.get(100_000).unwrap(), None);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn updates_existing_key_across_reopen() {
         let path = temp_path("update");
         {
