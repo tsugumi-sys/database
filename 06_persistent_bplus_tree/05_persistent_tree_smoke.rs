@@ -500,7 +500,7 @@ impl PersistentBPlusTree {
 
                 self.write_page(page_id, &internal_page.data)?;
                 self.write_page(new_internal_page_id, &new_internal_page.data)?;
-                self.write_page(PageId(0), &meta_page.data);
+                self.write_page(PageId(0), &meta_page.data)?;
 
                 Ok(Some(ChildSplit {
                     separator_key: internal_separator_key,
@@ -525,7 +525,7 @@ impl PersistentBPlusTree {
             self.write_page(new_root_page_id, &new_root.data)?;
 
             meta_page.set_root_page_id(new_root_page_id);
-            self.write_page(PageId(0), &meta_page.data);
+            self.write_page(PageId(0), &meta_page.data)?;
             self.root_page_id = new_root_page_id;
         }
         Ok(())
@@ -538,7 +538,7 @@ impl PersistentBPlusTree {
             match page.read_u8(NODE_TYPE_OFFSET) {
                 NODE_INTERNAL => {
                     let ipage = InternalPage::from_page(page)?;
-                    let child_page_id = ipage.child_for_key(key);
+                    page_id = ipage.child_for_key(key);
                 }
                 NODE_LEAF => {
                     let lpage = LeafPage::from_page(page)?;
@@ -588,6 +588,27 @@ mod tests {
             assert_eq!(reopened.get(key).unwrap(), Some(key * 10));
         }
         assert_eq!(reopened.get(99).unwrap(), None);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn root_split_persists_many_values_after_reopen() {
+        let path = temp_path("root_split");
+        {
+            let mut tree = PersistentBPlusTree::open(&path).unwrap();
+            for key in 0..300 {
+                tree.insert(key, key * 10).unwrap();
+            }
+            assert_ne!(tree.root_page_id, PageId(1));
+            tree.flush().unwrap();
+        }
+
+        let mut reopened = PersistentBPlusTree::open(&path).unwrap();
+        assert_ne!(reopened.root_page_id, PageId(1));
+        for key in [0, 1, 127, 128, 254, 255, 299] {
+            assert_eq!(reopened.get(key).unwrap(), Some(key * 10));
+        }
+        assert_eq!(reopened.get(999).unwrap(), None);
         fs::remove_file(path).unwrap();
     }
 
