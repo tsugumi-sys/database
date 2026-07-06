@@ -1,7 +1,7 @@
-// Step 7-4: Compact a slotted page after deletions.
+// Step 7-5: Exercise slotted page operations end to end.
 //
 // Run:
-// rustc --edition=2021 --test 04_compaction.rs && ./04_compaction
+// rustc --edition=2021 --test 05_slotted_page_smoke.rs && ./05_slotted_page_smoke
 
 #![allow(unused)]
 
@@ -12,7 +12,6 @@ struct SlotId(u16);
 struct SlottedPage {
     data: [u8; PAGE_SIZE],
 }
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SlotEntry {
     offset: u16,
@@ -92,19 +91,17 @@ impl SlottedPage {
             .copy_from_slice(&(slot_entry.size).to_le_bytes());
         Ok(())
     }
+
     fn insert_cell(&mut self, bytes: &[u8]) -> Result<SlotId, String> {
-        let free_start = self.free_start();
-        let free_end = self.free_end();
         let cell_size = bytes.len() as usize;
-        if free_end - free_start < cell_size + SLOT_ENTRY_SIZE {
+        if self.free_space() < cell_size + SLOT_ENTRY_SIZE {
             return Err("no enough space".to_string());
         }
-        let slot_id = self.allocate_slot_id()?;
-        let slot_offset = free_start;
+        let new_slot_id = self.allocate_slot_id()?;
+        let slot_offset = self.free_start();
         self.set_free_start(slot_offset + SLOT_ENTRY_SIZE);
-        let cell_offset = free_end - cell_size;
+        let cell_offset = self.free_end() - cell_size;
 
-        // write slot entry
         self.write_slot(
             slot_offset,
             SlotEntry {
@@ -112,12 +109,9 @@ impl SlottedPage {
                 size: cell_size as u16,
             },
         )?;
-
-        // write cell
-        self.data[cell_offset..free_end].copy_from_slice(&bytes);
+        self.data[cell_offset..cell_offset + cell_size].copy_from_slice(&bytes);
         self.set_free_end(cell_offset);
-
-        Ok(slot_id)
+        Ok(new_slot_id)
     }
 
     fn slot_offset(&self, slot_id: SlotId) -> usize {
@@ -125,6 +119,9 @@ impl SlottedPage {
     }
     fn read_slot(&self, slot_id: SlotId) -> Result<SlotEntry, String> {
         let slot_offset = self.slot_offset(slot_id);
+        if slot_offset > self.free_start() {
+            return Err("this slot is not allocated".to_string());
+        }
         let offset =
             u16::from_le_bytes(self.data[slot_offset..slot_offset + 2].try_into().unwrap());
         let size = u16::from_le_bytes(
@@ -134,6 +131,7 @@ impl SlottedPage {
         );
         Ok(SlotEntry { offset, size })
     }
+
     fn read_cell(&self, slot_id: SlotId) -> Result<Option<&[u8]>, String> {
         let slot_offset = self.slot_offset(slot_id);
         let free_start = self.free_start();
@@ -165,12 +163,15 @@ impl SlottedPage {
         )?;
         Ok(())
     }
+
     fn compact(&mut self) {
         let mut new_page = self.data;
         let mut new_free_end = PAGE_SIZE;
         for sid in 0..self.slot_count() {
             let slot_id = SlotId(sid);
             if let Ok(Some(cell_bytes)) = self.read_cell(slot_id) {
+                println!("compact slot: {:?}", slot_id);
+                println!("slot cell: {:?}", cell_bytes);
                 let cell_size = cell_bytes.len();
                 new_page[new_free_end - cell_size..new_free_end].copy_from_slice(&cell_bytes);
                 new_free_end -= cell_size;
@@ -181,11 +182,13 @@ impl SlottedPage {
         }
         self.data = new_page;
         self.set_free_end(new_free_end);
+        println!("new free end: {:?}", new_free_end);
+        println!("new_page: {:?}", new_page);
     }
 }
 
 fn main() {
-    println!("compact slotted page");
+    println!("slotted page smoke");
 }
 
 #[cfg(test)]
@@ -193,80 +196,49 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compact_preserves_live_slot_ids() {
+    fn insert_delete_compact_and_read() {
         let mut page = SlottedPage::new();
-        let a = page.insert_cell(b"alpha").unwrap();
-        let b = page.insert_cell(b"bravo bravo").unwrap();
-        let c = page.insert_cell(b"charlie").unwrap();
 
-        page.delete_cell(b).unwrap();
+        let name = page.insert_cell(b"name: alice").unwrap();
+        let email = page.insert_cell(b"email: alice@example.com").unwrap();
+        let note = page.insert_cell(b"note: active").unwrap();
+
+        assert_eq!(
+            page.read_cell(email).unwrap(),
+            Some(&b"email: alice@example.com"[..])
+        );
+
+        page.delete_cell(email).unwrap();
         page.compact();
 
-        assert_eq!(page.read_cell(a).unwrap(), Some(&b"alpha"[..]));
-        assert_eq!(page.read_cell(b).unwrap(), None);
-        assert_eq!(page.read_cell(c).unwrap(), Some(&b"charlie"[..]));
+        assert_eq!(page.read_cell(name).unwrap(), Some(&b"name: alice"[..]));
+        assert_eq!(page.read_cell(email).unwrap(), None);
+        assert_eq!(page.read_cell(note).unwrap(), Some(&b"note: active"[..]));
     }
 
     #[test]
-    fn compact_keeps_deleted_slots_absent() {
+    fn compacted_live_slots_survive_reusing_old_cell_space() {
         let mut page = SlottedPage::new();
-        let deleted = page.insert_cell(b"deleted").unwrap();
-        let live = page.insert_cell(b"live").unwrap();
 
-        page.delete_cell(deleted).unwrap();
-        page.compact();
-
-        assert_eq!(page.read_cell(deleted).unwrap(), None);
-        assert_eq!(page.read_cell(live).unwrap(), Some(&b"live"[..]));
-    }
-
-    #[test]
-    fn compact_increases_contiguous_free_space() {
-        let mut page = SlottedPage::new();
-        let a = page.insert_cell(&[1; 20]).unwrap();
-        let b = page.insert_cell(&[2; 40]).unwrap();
-        let c = page.insert_cell(&[3; 20]).unwrap();
-        page.delete_cell(b).unwrap();
-        let before = page.free_space();
-
-        page.compact();
-
-        assert!(page.free_space() > before);
-        assert_eq!(page.read_cell(a).unwrap(), Some(&[1; 20][..]));
-        assert_eq!(page.read_cell(c).unwrap(), Some(&[3; 20][..]));
-    }
-
-    #[test]
-    fn compact_makes_reclaimed_space_usable() {
-        let mut page = SlottedPage::new();
         let deleted = page.insert_cell(&[1; 120]).unwrap();
         let live = page.insert_cell(&[2; 40]).unwrap();
 
         page.delete_cell(deleted).unwrap();
         assert!(page.insert_cell(&[3; 80]).is_err());
 
+        // println!("before compated: {:?}", page);
+
         page.compact();
-        let inserted = page.insert_cell(&[3; 80]).unwrap();
+        // println!("compated: {:?}", page);
+
+        let inserted = page.insert_cell(&[3; 100]).unwrap();
+
+        println!("deleted: {:?}", deleted);
+        println!("live: {:?}", live);
+        println!("inserted: {:?}", inserted);
 
         assert_eq!(page.read_cell(deleted).unwrap(), None);
         assert_eq!(page.read_cell(live).unwrap(), Some(&[2; 40][..]));
-        assert_eq!(page.read_cell(inserted).unwrap(), Some(&[3; 80][..]));
-    }
-
-    #[test]
-    fn compact_updates_live_slot_offsets() {
-        let mut page = SlottedPage::new();
-        let deleted = page.insert_cell(&[1; 120]).unwrap();
-        let live = page.insert_cell(&[2; 40]).unwrap();
-        let before = page.read_slot(live).unwrap();
-
-        page.delete_cell(deleted).unwrap();
-        page.compact();
-
-        let after = page.read_slot(live).unwrap();
-        assert_ne!(after.offset, before.offset);
-        assert_eq!(after.offset, (PAGE_SIZE - 40) as u16);
-        assert_eq!(after.size, 40);
-        assert_eq!(page.read_cell(live).unwrap(), Some(&[2; 40][..]));
+        assert_eq!(page.read_cell(inserted).unwrap(), Some(&[3; 100][..]));
     }
 }
